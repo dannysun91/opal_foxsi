@@ -27,10 +27,10 @@ from matplotlib.widgets import Button
 # Section 0: Initialize Parameters
 ###############################################################################
 ########### File Parameters for Specifying Image
-pos            = 4       # Optic Position
+pos            = 5       # Optic Position
 run            = 1       # Testing Run Number
 basedir        = os.path.dirname(os.getcwd()) # Change Base Directory for images
-team           = "Nagoya"        # Team Name
+team           = "Heritage"        # Team Name
 date           = '07-23-24'        # Date of Test
 filetype       = '.JPG'            # Image File Type
 ########### Box surrounding optical laser image (usually a set of 4 x 4 squares)
@@ -137,7 +137,7 @@ if plt_flg:
     for rii in range(0,rings*2,2):
         # Find ellipse equation
         xi,yi = opalfox.ellipse(centers[rii,:]*sf-(boxlen)/2.0,axes[rii,:]*sf,  np.radians(angles[rii]))
-        xo,yo = opalfox.ellipse(centers[rii,:]*sf-(boxlen)/2.0,axes[rii+1,:]*sf,np.radians(angles[rii+1]))
+        xo,yo = opalfox.ellipse(centers[rii+1,:]*sf-(boxlen)/2.0,axes[rii+1,:]*sf,np.radians(angles[rii+1]))
         # Plot ellipse
         plt.plot(xi,-yi, color='red', label='Fitted Ellipse')
         plt.plot(xo,-yo, color='red', label='Fitted Ellipse')

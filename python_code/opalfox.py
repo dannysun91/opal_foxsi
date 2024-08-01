@@ -33,7 +33,7 @@ import cv2
 from scipy.stats import binned_statistic_2d
 from scipy.signal import find_peaks
 from scipy.ndimage import median_filter, gaussian_filter
-from matplotlib.widgets import Button
+from matplotlib.widgets import Button, CheckButtons
 import time
 plt.rcParams["font.family"] = "Times New Roman" 
 plt.rcParams["font.size"]   = 18
@@ -67,13 +67,15 @@ def plotimage(image,brighten=0,title="FOXSI Optical Alignment",cmap='viridis'):
     return fig, ax
 ############################################################
 # Allows user to select n points on image (opens and closes plot for selection)
-def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',title="FOXSI: Select {:.0f} Points on Image"):
+def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',title="FOXSI: Select {:.0f} Points on Image",overplot_type=None):
     title=title.format(n)
     # Show Image (and set up scatter points)
     if ax == 0:
         fig, ax = plotimage(image,brighten=brighten,title=title,cmap=cmap)
         fig.canvas.manager.full_screen_toggle()
     scatter = ax.scatter([], [], marker='.', color='red')
+    if overplot_type!=None:
+        overplot, = ax.plot([],[], color='red',alpha=0.3)
     # Plot Lines at different angles
     sz = np.shape(image)
     lw=0.5
@@ -89,6 +91,9 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
     bundo = Button(axundo, 'Undo')
     axreset = fig.add_axes([0.45, 0.05, 0.1, 0.075])
     breset = Button(axreset, 'Reset')
+    # if overplot_type != None:
+        # axtoggle = fig.add_axes([0.0, 0.9, 0.01, 0.075])
+        # btoggle = CheckButtons(axundo, 'Toggle')
     plt.draw()
 
 
@@ -99,34 +104,55 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
             self.points = []    # x,y coordinates
             self.z      = []    # z data
             self.cid    = None  # CID
-            self.goNext = False
-
-        def done(self, event):
-            if len(self.points) == n:
+            self.goNext = False # continue to next plot
+            self.toggle = True
+        ###
+        # BUTTONS
+        ###
+        def done(self, event): # button to move on to next process
+            if len(self.points) == n: # condition met
                 self.goNext = True
                 self.disconnect()
-            else:
-                plt.text(5,0,"Not enough points picked")
+            else: # not enough points selected
+                plt.text(4,0,"Not enough points picked")
                 plt.draw()
-        def undo(self, event):
+        def undo(self, event): # erase last added point
             if len(self.points) > 1:
                 self.points.pop()
                 self.z.pop()
                 scatter.set_offsets(self.points)
+                if overplot_type == "ellipse": # update the overplot
+                    if len(self.points) < 5:
+                        overplot.set_xdata([])
+                        overplot.set_ydata([])
+                    else:
+                        self.update_overplot()
                 plt.draw()
                 ax.set_title(f"Select {n - len(self.points)} more points")
             else:
                 self.points = []
                 self.z      = []
                 scatter.set_offsets(np.array([]).reshape(0, 2))
+                if overplot_type == "ellipse":
+                    overplot.set_xdata([])
+                    overplot.set_ydata([])
                 plt.draw()
                 ax.set_title(f"Select {n - len(self.points)} more points")
-        def reset(self, event):
+        def reset(self, event): # delete all selected points
             self.points = []
             self.z      = []
             scatter.set_offsets(np.array([]).reshape(0, 2))
+            if overplot_type == "ellipse": # update overplot
+                overplot.set_xdata([])
+                overplot.set_ydata([])
             plt.draw()
             ax.set_title(f"Select {n - len(self.points)} more points")
+        def toggle(self, event):
+            if not self.toggle:
+                overplot.set_alpha(0.3)
+            else:
+                overplot.set_alpha(0)
+            self.toggle = not self.toggle
 
         def __call__(self, event):
             if not bdone.ax.contains(event)[0] and not bundo.ax.contains(event)[0] and not breset.ax.contains(event)[0]: # not click button
@@ -140,13 +166,24 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
                                 scatter.set_offsets(self.points)
                                 plt.draw()
                                 ax.set_title(f"Select {n - len(self.points)} more points")
-                            # else:
-                            #     self.z.append((self.image_data[yi, xi].fill(np.nan))) # Replace with NaNs
+
+                                if overplot_type == "ellipse" and len(self.points)>=5: # requires five points
+                                    self.update_overplot()
                     elif len(self.points) == n:
                         ax.set_title(f"All points selected, click Done")
-                    # Stop connection after n points are selected
-                    # if len(self.points) == n:
-                    #     self.disconnect()
+
+        ### HELPER FUNCTIONS ###
+        def update_overplot(self): # helper function for updating overplot
+            np_points = np.array(self.points)
+            inner_x = np_points[:,0]
+            inner_y = np_points[:,1]
+            inner_pts = (np.vstack((inner_x, inner_y), dtype=np.float32)).T
+            centers, axes, angles = cv2.fitEllipse(inner_pts)
+
+            xi,yi = ellipse(centers,axes,  np.radians(angles))
+            # Plot ellipse
+            overplot.set_xdata(xi)
+            overplot.set_ydata(yi)
         # Disconnect user clicks
         def disconnect(self):
             # plt.close()
@@ -403,13 +440,13 @@ def fitrings(image,image_bin=0,rings=2,auto=1,rbin=np.linspace(0, np.sqrt(2), nu
             
             # Select inner ring
             print("Select "+str(tnum)+" points for inner edge of Ring "+str(ri+1))
-            inner_ring = selectpoints(image_newbright,n=tnum,norm=1,title='Select {:.0f} Points for Inner Ring '+str(ri+1))#,cmap="gray")
+            inner_ring = selectpoints(image_newbright,n=tnum,norm=1,title='Select {:.0f} Points for Inner Ring '+str(ri+1), overplot_type="ellipse")#,cmap="gray")
             inner_x[:,ri] = inner_ring[:,0]
             inner_y[:,ri] = inner_ring[:,1]
             inner_r[:,ri] = np.sqrt(inner_x[:,ri]**2 + inner_y[:,ri]**2)
             # Select outer ring
             print("Select "+str(tnum)+" points for outer edge of Ring "+str(ri+1))
-            outer_ring = selectpoints(image_newbright,n=tnum,norm=1,title='Select {:.0f} Points for Outer Ring '+str(ri+1))#,cmap="gray")
+            outer_ring = selectpoints(image_newbright,n=tnum,norm=1,title='Select {:.0f} Points for Outer Ring '+str(ri+1), overplot_type="ellipse")#,cmap="gray")
             outer_x[:,ri] = outer_ring[:,0]
             outer_y[:,ri] = outer_ring[:,1]
             outer_r[:,ri] = np.sqrt(outer_ring[:,0]**2 + outer_ring[:,1]**2)
