@@ -1,18 +1,20 @@
+"""
 # FOXSI IV - Optical Alignment:
 #            Reads PNG Files of Laser Photos for Alignment and 
 #            Compares to Simulation
 # ----------------------------
 # 09/18/2023
 # Orlando Romeo
+"""
 ############################################################
-   XX                    /\                   ,'|
- XX  XX ------------ o--'O `.                /  /
-   XX                 `--.   `-----------._,' ,'
-                          \              ,---'
-                           ) )    _,--(  |
-                          /,^.---'     )/\\
-                         ((   \\      ((  \\
-                          \)   \)      \) (/   
+#  XX                    /\\                   ,'|
+#XX  XX ------------ o--'O `.                /  /
+#  XX                 `--.   `-----------._,' ,'
+#                         \               ,---'
+#                          ) )    _,--(   |
+#                         /,^.---'     )/\\
+#                        ((   \\     ((  \\
+#                         \)   \)     \) (/   
 #############################################################
 # Import Third-party libraries
 import os
@@ -20,16 +22,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import opalfox
+from matplotlib.widgets import Button
 #%%############################################################################
 # Section 0: Initialize Parameters
 ###############################################################################
 ########### File Parameters for Specifying Image
-pos            = 1       # Optic Position
+pos            = 4       # Optic Position
 run            = 1       # Testing Run Number
 basedir        = os.path.dirname(os.getcwd()) # Change Base Directory for images
-team           = "Heritage"        # Team Name
-date           = '01-01-24'        # Date of Test
-filetype       = '.png'            # Image File Type
+team           = "Nagoya"        # Team Name
+date           = '07-23-24'        # Date of Test
+filetype       = '.JPG'            # Image File Type
 ########### Box surrounding optical laser image (usually a set of 4 x 4 squares)
 bsf            = 1.0 # Box Scaling Factor for cases that image is not entire 4x4 squares (usually set to 1)
 boxlen         = np.array([2.54*4.0])/bsf # Box Length (cm) - Can be 1 or 2 element long
@@ -82,7 +85,7 @@ sf = np.array([boxlen[0]/sz[0], boxlen[-1]/sz[1]])
 # Increase Image Brightness (Feel free to change any case based on images)
 if team == 'Nagoya':
     image_proj = opalfox.alterimage(image_proj,1,5)
-if 0:
+if 0: # FALSE
     image_proj = opalfox.alterimage(image_proj,1,1)
 # Crop grey image with a min brightness set
 gimage = opalfox.fixbrightness(image_proj,minbrightness=1,plot=0,crop=0)
@@ -120,10 +123,13 @@ else:
 # Check to plot fitted rings images
 if plt_flg:
     # Create image with superimposed rings
-    fig, ax = plt.subplots(figsize=(24,16))
+    fig, ax = plt.subplots(figsize=(24,16),num='Ring Fit')
+    fig.canvas.manager.full_screen_toggle()
+    
     # Plot Image
     plt.imshow(data_matrix,extent=[-boxlen[0]/2.0,boxlen[0]/2.0,-boxlen[-1]/2.0,boxlen[-1]/2.0])
     ax.set_title("FOXSI4 "+team+" Rings: P"+str(pos))
+
     ax.axis("on")
     plt.xlabel('X (cm)')
     plt.ylabel('Y (cm)')
@@ -140,8 +146,18 @@ if plt_flg:
             plt.plot(centers[rii,0]*sf[0]-boxlen[0]/2.0,(boxlen[-1]/2.0-centers[rii,1]*sf[1]), 'r.',markersize=8)
         else:
             plt.plot(centers[rii+1,0]*sf[0]-boxlen[0]/2.0,(boxlen[-1]/2.0-centers[rii+1,1]*sf[1]), 'b.',markersize=8)
-        plt.show()
+        # plt.show()
     plt.savefig(edir+"_rings.png")
+
+    axnext = fig.add_axes([0.81, 0.5, 0.1, 0.075])
+    bnext = Button(axnext, 'Next')
+    # Check user clicks
+    callback = opalfox.Pause(bnext)
+    # create button and events
+    callback.cid = plt.connect('button_press_event', callback)
+
+    while not callback.goNext:
+        plt.pause(0.1)
 #%%############################################################################
 # Section 1.4: Analyze Data Image - Find Ring Asymmetry
 ###############################################################################
@@ -211,6 +227,14 @@ color_map = plt.colormaps.get_cmap('gist_rainbow')
 if plt_flg:
     # Create rings plot
     fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+
+    axnext = fig.add_axes([0.45, 0, 0.1, 0.075])
+    bnext = Button(axnext, 'Finish')
+    # Check user clicks
+    callback = opalfox.Pause(bnext)
+    # create button and events
+    callback.cid = plt.connect('button_press_event', callback)
+
     ax[0].set_title('Original Rings')
     ax[0].set_xlabel("X (cm)")
     ax[0].set_ylabel("Y (cm)")
@@ -252,6 +276,11 @@ if plt_flg:
         ax[1].plot(xi2*sf[0],yi2*sf[1],'-',linewidth=4,color=color_map(cindexi))
         ax[1].plot(xo2*sf[0],yo2*sf[1],'-',linewidth=4,color=color_map(cindexo))
         plt.savefig(edir+".png")
+
+    while not callback.goNext:
+        plt.pause(0.1)
+
+    plt.close('all')
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -263,216 +292,217 @@ if plt_flg:
 # Section 2.0: Analyze Simulation Image
 ###############################################################################
 # Create array to house off axis value (center diff, ratio, etc.)
-sim_offaxis = np.empty(len(sim_angles))
-# Iterate over simulation angles
-for ai in range(0,len(sim_angles)):
-    angle = "{:.1f}".format(sim_angles[ai])
-    print('----------------------------------------------')
-    print('SIM ANGLE: '+angle)
-    # Simulation files
-    sfile           = "angle_"+str(angle)                  # Original file name
-    sdirf           = os.path.join(basedir,'images',team,'Sims',"P"+str(spos)+"_X"+str(xmod))
-    sdirfile        = os.path.join(sdirf,sfile+filetype)   # Sim File Directory 
-    sefile          = os.path.join("Image_Processing","FOXSI4_"+team+"_ellipse_P"+str(spos)+"_X"+str(xmod)+"_A"+str(angle))# Ellipse File
-    snewfile        = 'FOXSI_'+sfile+'_projected'            # New File Name
-    sdirnfile       = os.path.join(sdirf,"Image_Processing",snewfile+filetype) # New File Directory
-    snfile_flg      = os.path.exists(sdirnfile)              # Check if newfile exists
-    # -------------------------------------------------------------------------
-    # Fix Image Projection
-    if proj_flg or not snfile_flg:
-        # Read Image File
-        simage_original = opalfox.readimage(sdirfile)
-        simage_proj = opalfox.fixperspective(simage_original, savedir=sdirnfile)
-    else:
-        simage_proj = opalfox.readimage(sdirnfile)
-    plt.close('all')
-    # -------------------------------------------------------------------------
-    # Fix Image Brightness
-    # Find Scaling Factor (Plot is 10 cm in length)
-    ssz = np.shape(simage_proj)
-    sboxlen = np.array([10.0])
-    ssf = np.array([sboxlen[0]/ssz[0], sboxlen[-1]/ssz[1]])
-    # Crop grey image with a min brightness set
-    sgimage = opalfox.fixbrightness(simage_proj,minbrightness=1,plot=0,crop=0)
-    # ------------------------------------------------------------------------- 
-    # Bin Image Brightness
-    # Find median brightness in each bin by r and theta (polar coordinates)
-    srbin = np.linspace(0, np.sqrt(2), num=501) # Radial bins
-    stbin = np.linspace(0, 2*np.pi, num=17)     # Theta bins
-    simage_med = opalfox.binimage(sgimage,rbin=srbin,tbin=stbin,plot=0)
-    # ------------------------------------------------------------------------- 
-    # Detection of Ring Edges
-    # Initialize parameters
-    scenters  = 0
-    saxes     = 0
-    sangles   = 0
-    rings     = 2
-    sdata_matrix = simage_proj
-    sedir = os.path.join(sdirf,sefile)
-    if ellp_flg or not os.path.exists(sedir+".npz"):
-        # Find median brightness in each bin by r and theta (polar coordinates)
-        scenters,saxes,sangles = opalfox.fitrings(sdata_matrix,image_bin=simage_med,
-                                                  rings=rings,auto=0,rbin=srbin,tbin=stbin,plot=0,
-                                                  minbright=[0,0])
-        # Save ellipse files
-        np.savez(sedir,centers=scenters,axes=saxes,angles=sangles)
-    else:    
-        sellipse = np.load(sedir+".npz")
-        scenters = sellipse['centers']
-        saxes    = sellipse['axes']
-        sangles  = sellipse['angles']
-    if plt_flg:
-        # Create image with superimposed rings
-        fig, ax = plt.subplots(figsize=(24,16))
-        # Plot Image
-        plt.imshow(sdata_matrix,extent=[0,10,10,0])
-        ax.set_title("FOXSI4 "+team+" Rings: P"+str(spos)+", ANG"+angle)
-        ax.axis("on")
-        plt.xlabel('X (cm)')
-        plt.ylabel('Y (cm)')
-        # Iterate each ring
-        for rii in range(0,rings*2,2):
-            # Find ellipse equation
-            sxi,syi = opalfox.ellipse(scenters[rii,:],saxes[rii,:],np.radians(sangles[rii]))
-            sxo,syo = opalfox.ellipse(scenters[rii+1,:],saxes[rii+1,:],np.radians(sangles[rii+1]))
-            # Plot ellipse
-            plt.plot(sxi*ssf[0],syi*ssf[1], color='red', label='Fitted Ellipse')
-            plt.plot(sxo*ssf[0],syo*ssf[1], color='red', label='Fitted Ellipse')
-            plt.show()
-        plt.savefig(sedir+"_rings.png")
-    # -----------------------------------------------------------------------------
-    # Find asymmetry by max radial distance and center differences
-    # Offset Centers
-    snew_centers = scenters - scenters[0,:]
-    # Fit ellipse
-    six,siy = opalfox.ellipse(snew_centers[0,:],saxes[0,:],np.radians(sangles[0]),theta=np.linspace(0, 2*np.pi, 10000))
-    sox,soy = opalfox.ellipse(snew_centers[-1,:],saxes[-1,:],np.radians(sangles[-1]),theta=np.linspace(0, 2*np.pi, 10000))
-    # Find angles
-    sitheta = np.arctan2(-siy,six) % (2*np.pi)
-    sotheta = np.arctan2(-soy,sox) % (2*np.pi)
-    # Find radial distances
-    sri = np.sqrt(six**2+siy**2)
-    sro = np.sqrt(sox**2+soy**2)
-    # Find difference in radial distance
-    sdiffr = np.abs( sri[np.argsort(sitheta)] - sro[np.argsort(sotheta)] )
-    # Sort Angles
-    stheta_sort = np.sort(sitheta)
-    sotheta_sort = np.sort(sotheta)
-    # METHODS TO DETERMINE OFF AXIS VALUE
-    match offaxis_mthd:
-        # METHOD 1: Find ratio of max/min radial distances from inner to outer circle
-        case 'maxminratio':
-            # Find ratio based on max radial distance
-            smaxminratio = np.max(sdiffr)/np.min(sdiffr)
-            sangle_diff = stheta_sort[np.argmax(sdiffr)]*180/np.pi
-            print('MAX/MIN RADIAL DISTANCE RATIO: ' + str(smaxminratio))
-            print('OFF ANGLE ASYMMETRY: ' + str(sangle_diff))
-            sim_offaxis[ai] = smaxminratio
-        # METHOD 2: Find ratio of max radial distance from inner to outer circle &
-        #           radial distance 180 deg from max distance
-        case 'maxratio':
-            # Find rad distance 180 deg from max rad distance
-            sdeg180 = (stheta_sort[np.argmax(sdiffr)]+np.pi) % (2*np.pi)
-            smaxratio = np.max(sdiffr)/sdiffr[np.argmin(np.abs(sdeg180 - stheta_sort))]
-            sangle_diff = stheta_sort[np.argmax(sdiffr)]*180/np.pi
-            print('MAX/MIN RADIAL DISTANCE RATIO: ' + str(smaxratio))
-            print('OFF ANGLE ASYMMETRY: ' + str(sangle_diff))
-            sim_offaxis[ai] = smaxratio
-        # METHOD 3: Find ratio of inner/outer center distances with radial distance
-        #           of outer circle at same angle
-        case 'centerratio':
-            # Find ratio of center difference and mean radial distance
-            scntrratio = np.sqrt(np.sum(snew_centers[3,:]**2))/np.mean(sro)
-            sctheta = np.arctan2(-snew_centers[3,1],snew_centers[3,0]) % (2*np.pi)*180/np.pi
-            print('CENTER DISTANCE DIFFERENCE: ' + str(scntrratio))
-            print('CENTER ANGLE ASYMMETRY: ' + str(sctheta))
-            sim_offaxis[ai] = scntrratio
-        # METHOD 4: Find ratio of inner/outer center distances with radial distance
-        #           of outer circle at same angle
-        #case 'centerratio':
-        case _  :
-            raise ValueError("Error: Unexpected method")
-    # -------------------------------------------------------------------------
-    if plt_flg:
-        # Compare Data and Sim
-        cmap='viridis'
-        fig, ax = plt.subplots(figsize=(24,16))
-        # Set ranges in cm
-        yrange = np.array([-boxlen[0]/2.0,boxlen[-1]/2.0])
-        xrange = np.array([-boxlen[0]/2.0,boxlen[-1]/2.0])
-        syrange = np.array([-sboxlen[0]/2.0,sboxlen[-1]/2.0])
-        sxrange = np.array([-sboxlen[0]/2.0,sboxlen[-1]/2.0])
-        # Scale inner ellipse to data
-        scsim = 1#np.max(saxes[3,:])/np.max(axes[3,:])
-        # Find new center from data
-        x_off = -(boxlen[0]/2.0)+centers[0,0]*sf[0]
-        y_off =  (boxlen[-1]/2.0)-centers[0,1]*sf[1] # Reverse y direction due to reverse yrange
-        # Find new center from sim
-        sx_off = -(sboxlen[0]/2.0)+scenters[0,0]*ssf[0]
-        sy_off =  (sboxlen[0]/2.0)-scenters[0,1]*ssf[1]
-        plt.imshow(image_proj,cmap=cmap,extent=[xrange[0]-x_off,xrange[1]-x_off,
-                                                yrange[0]-y_off,yrange[1]-y_off])
-        plt.plot(0,0,'r.',markersize=30)
-        rng = np.array([-5,5])/bsf
-        plt.xlim(rng)
-        plt.ylim(rng)
-        # Iterate each ring
-        for rii in range(0,rings*2,2):
-            # Find ellipse equation
-            xi,yi = opalfox.ellipse(new_centers[rii,:]*sf,
-                                    axes[rii,:]*sf ,np.radians(angles[rii]))
-            xo,yo = opalfox.ellipse(new_centers[rii+1,:]*sf,
-                                    axes[rii+1,:]*sf,np.radians(angles[rii+1]))
-            # Plot ellipse
-            plt.plot(xi,-yi, color='red', label='Fitted Ellipse')
-            plt.plot(xo,-yo, color='red', label='Fitted Ellipse')
-            plt.show()
-        # Plot Sim
-        sgimage[np.where(sgimage==255)] = np.nan
-        im = ax.imshow(sgimage,
-                       #origin='lower',
-                       extent=[(sxrange[0]-sx_off)*scsim,(sxrange[1]-sx_off)*scsim,
-                               (syrange[0]-sy_off)*scsim,(syrange[1]-sy_off)*scsim])
-        
-        
-        # Gridlines based on minor ticks
-        ax.grid(which='major', color='w', linestyle='-', linewidth=.1)
-        
-        # Rotate sim image
-        trans_data = mtransforms.Affine2D().rotate_deg(ang_offaxis+ang_off) + ax.transData
-        im.set_transform(trans_data)
-        # Display intended extent of the image
-        x1, x2, y1, y2 = im.get_extent()
-        ax.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], "y--",
-                transform=trans_data)
-        plt.xlabel('X (cm)')
-        plt.ylabel('Y (cm)')
-        plt.title('FOXSI 4 DATA/SIM- '+team+': POS'+str(pos)+", ANG"+angle)
-        plt.show()
-        plt.plot(new_centers[3,0]*sf[0],-new_centers[3,1]*sf[1],'b.',markersize=30)
-        plt.savefig(edir+"_ang_"+angle+"_match.png")
+if False:
+    sim_offaxis = np.empty(len(sim_angles))
+    # Iterate over simulation angles
+    for ai in range(0,len(sim_angles)):
+        angle = "{:.1f}".format(sim_angles[ai])
+        print('----------------------------------------------')
+        print('SIM ANGLE: '+angle)
+        # Simulation files
+        sfile           = "angle_"+str(angle)                  # Original file name
+        sdirf           = os.path.join(basedir,'images',team,'Sims',"P"+str(spos)+"_X"+str(xmod))
+        sdirfile        = os.path.join(sdirf,sfile+filetype)   # Sim File Directory 
+        sefile          = os.path.join("Image_Processing","FOXSI4_"+team+"_ellipse_P"+str(spos)+"_X"+str(xmod)+"_A"+str(angle))# Ellipse File
+        snewfile        = 'FOXSI_'+sfile+'_projected'            # New File Name
+        sdirnfile       = os.path.join(sdirf,"Image_Processing",snewfile+filetype) # New File Directory
+        snfile_flg      = os.path.exists(sdirnfile)              # Check if newfile exists
+        # -------------------------------------------------------------------------
+        # Fix Image Projection
+        if proj_flg or not snfile_flg:
+            # Read Image File
+            simage_original = opalfox.readimage(sdirfile)
+            simage_proj = opalfox.fixperspective(simage_original, savedir=sdirnfile)
+        else:
+            simage_proj = opalfox.readimage(sdirnfile)
         plt.close('all')
-#%%############################################################################
-# Section 3: Match Data to Simulation
-###############################################################################
-###############################################################################
-# Interpolate data
-offangle = np.interp(data_offaxis,sim_offaxis,sim_angles)
-# Plot
-plt.figure(figsize=(9,6))
-plt.plot(sim_angles,sim_offaxis,'r.-',markersize=15)
-plt.plot([-1,offangle],[data_offaxis,data_offaxis],'b--')
-plt.plot([offangle,offangle],[data_offaxis,sim_offaxis[0]*.98],'b--')
-plt.plot(offangle,data_offaxis,'b.',markersize=20)
-plt.xlim([sim_angles[0]*.98,sim_angles[-1]*1.02])
-plt.ylim([sim_offaxis[0]*.98,sim_offaxis[-1]*1.02])
-#plt.xlim([sim_angles[0]*.98,1.9])
-#plt.ylim([sim_offaxis[0]*.98,.105])
-#plt.xlim(10.5,13.0)
-#plt.ylim(.3,.4)
-plt.grid()
-plt.xlabel('Off Angle (arcmin)')
-plt.ylabel('Asymmetry Value')
-plt.title("Off Axis ("+lab_offaxis+" - ASYM ANG {:.0f}°".format(ang_offaxis)+"): P"+str(pos)+ " X"+str(xmod)+ " - {:.3f}\'".format(offangle))
-plt.show()
-plt.savefig(os.path.join(fdir,"FOXSI4_"+team+"_"+file+"_offaxis-"+offaxis_mthd+".png"))
+        # -------------------------------------------------------------------------
+        # Fix Image Brightness
+        # Find Scaling Factor (Plot is 10 cm in length)
+        ssz = np.shape(simage_proj)
+        sboxlen = np.array([10.0])
+        ssf = np.array([sboxlen[0]/ssz[0], sboxlen[-1]/ssz[1]])
+        # Crop grey image with a min brightness set
+        sgimage = opalfox.fixbrightness(simage_proj,minbrightness=1,plot=0,crop=0)
+        # ------------------------------------------------------------------------- 
+        # Bin Image Brightness
+        # Find median brightness in each bin by r and theta (polar coordinates)
+        srbin = np.linspace(0, np.sqrt(2), num=501) # Radial bins
+        stbin = np.linspace(0, 2*np.pi, num=17)     # Theta bins
+        simage_med = opalfox.binimage(sgimage,rbin=srbin,tbin=stbin,plot=0)
+        # ------------------------------------------------------------------------- 
+        # Detection of Ring Edges
+        # Initialize parameters
+        scenters  = 0
+        saxes     = 0
+        sangles   = 0
+        rings     = 2
+        sdata_matrix = simage_proj
+        sedir = os.path.join(sdirf,sefile)
+        if ellp_flg or not os.path.exists(sedir+".npz"):
+            # Find median brightness in each bin by r and theta (polar coordinates)
+            scenters,saxes,sangles = opalfox.fitrings(sdata_matrix,image_bin=simage_med,
+                                                    rings=rings,auto=0,rbin=srbin,tbin=stbin,plot=0,
+                                                    minbright=[0,0])
+            # Save ellipse files
+            np.savez(sedir,centers=scenters,axes=saxes,angles=sangles)
+        else:    
+            sellipse = np.load(sedir+".npz")
+            scenters = sellipse['centers']
+            saxes    = sellipse['axes']
+            sangles  = sellipse['angles']
+        if plt_flg:
+            # Create image with superimposed rings
+            fig, ax = plt.subplots(figsize=(24,16))
+            # Plot Image
+            plt.imshow(sdata_matrix,extent=[0,10,10,0])
+            ax.set_title("FOXSI4 "+team+" Rings: P"+str(spos)+", ANG"+angle)
+            ax.axis("on")
+            plt.xlabel('X (cm)')
+            plt.ylabel('Y (cm)')
+            # Iterate each ring
+            for rii in range(0,rings*2,2):
+                # Find ellipse equation
+                sxi,syi = opalfox.ellipse(scenters[rii,:],saxes[rii,:],np.radians(sangles[rii]))
+                sxo,syo = opalfox.ellipse(scenters[rii+1,:],saxes[rii+1,:],np.radians(sangles[rii+1]))
+                # Plot ellipse
+                plt.plot(sxi*ssf[0],syi*ssf[1], color='red', label='Fitted Ellipse')
+                plt.plot(sxo*ssf[0],syo*ssf[1], color='red', label='Fitted Ellipse')
+                plt.show()
+            plt.savefig(sedir+"_rings.png")
+        # -----------------------------------------------------------------------------
+        # Find asymmetry by max radial distance and center differences
+        # Offset Centers
+        snew_centers = scenters - scenters[0,:]
+        # Fit ellipse
+        six,siy = opalfox.ellipse(snew_centers[0,:],saxes[0,:],np.radians(sangles[0]),theta=np.linspace(0, 2*np.pi, 10000))
+        sox,soy = opalfox.ellipse(snew_centers[-1,:],saxes[-1,:],np.radians(sangles[-1]),theta=np.linspace(0, 2*np.pi, 10000))
+        # Find angles
+        sitheta = np.arctan2(-siy,six) % (2*np.pi)
+        sotheta = np.arctan2(-soy,sox) % (2*np.pi)
+        # Find radial distances
+        sri = np.sqrt(six**2+siy**2)
+        sro = np.sqrt(sox**2+soy**2)
+        # Find difference in radial distance
+        sdiffr = np.abs( sri[np.argsort(sitheta)] - sro[np.argsort(sotheta)] )
+        # Sort Angles
+        stheta_sort = np.sort(sitheta)
+        sotheta_sort = np.sort(sotheta)
+        # METHODS TO DETERMINE OFF AXIS VALUE
+        match offaxis_mthd:
+            # METHOD 1: Find ratio of max/min radial distances from inner to outer circle
+            case 'maxminratio':
+                # Find ratio based on max radial distance
+                smaxminratio = np.max(sdiffr)/np.min(sdiffr)
+                sangle_diff = stheta_sort[np.argmax(sdiffr)]*180/np.pi
+                print('MAX/MIN RADIAL DISTANCE RATIO: ' + str(smaxminratio))
+                print('OFF ANGLE ASYMMETRY: ' + str(sangle_diff))
+                sim_offaxis[ai] = smaxminratio
+            # METHOD 2: Find ratio of max radial distance from inner to outer circle &
+            #           radial distance 180 deg from max distance
+            case 'maxratio':
+                # Find rad distance 180 deg from max rad distance
+                sdeg180 = (stheta_sort[np.argmax(sdiffr)]+np.pi) % (2*np.pi)
+                smaxratio = np.max(sdiffr)/sdiffr[np.argmin(np.abs(sdeg180 - stheta_sort))]
+                sangle_diff = stheta_sort[np.argmax(sdiffr)]*180/np.pi
+                print('MAX/MIN RADIAL DISTANCE RATIO: ' + str(smaxratio))
+                print('OFF ANGLE ASYMMETRY: ' + str(sangle_diff))
+                sim_offaxis[ai] = smaxratio
+            # METHOD 3: Find ratio of inner/outer center distances with radial distance
+            #           of outer circle at same angle
+            case 'centerratio':
+                # Find ratio of center difference and mean radial distance
+                scntrratio = np.sqrt(np.sum(snew_centers[3,:]**2))/np.mean(sro)
+                sctheta = np.arctan2(-snew_centers[3,1],snew_centers[3,0]) % (2*np.pi)*180/np.pi
+                print('CENTER DISTANCE DIFFERENCE: ' + str(scntrratio))
+                print('CENTER ANGLE ASYMMETRY: ' + str(sctheta))
+                sim_offaxis[ai] = scntrratio
+            # METHOD 4: Find ratio of inner/outer center distances with radial distance
+            #           of outer circle at same angle
+            #case 'centerratio':
+            case _  :
+                raise ValueError("Error: Unexpected method")
+        # -------------------------------------------------------------------------
+        if plt_flg:
+            # Compare Data and Sim
+            cmap='viridis'
+            fig, ax = plt.subplots(figsize=(24,16))
+            # Set ranges in cm
+            yrange = np.array([-boxlen[0]/2.0,boxlen[-1]/2.0])
+            xrange = np.array([-boxlen[0]/2.0,boxlen[-1]/2.0])
+            syrange = np.array([-sboxlen[0]/2.0,sboxlen[-1]/2.0])
+            sxrange = np.array([-sboxlen[0]/2.0,sboxlen[-1]/2.0])
+            # Scale inner ellipse to data
+            scsim = 1#np.max(saxes[3,:])/np.max(axes[3,:])
+            # Find new center from data
+            x_off = -(boxlen[0]/2.0)+centers[0,0]*sf[0]
+            y_off =  (boxlen[-1]/2.0)-centers[0,1]*sf[1] # Reverse y direction due to reverse yrange
+            # Find new center from sim
+            sx_off = -(sboxlen[0]/2.0)+scenters[0,0]*ssf[0]
+            sy_off =  (sboxlen[0]/2.0)-scenters[0,1]*ssf[1]
+            plt.imshow(image_proj,cmap=cmap,extent=[xrange[0]-x_off,xrange[1]-x_off,
+                                                    yrange[0]-y_off,yrange[1]-y_off])
+            plt.plot(0,0,'r.',markersize=30)
+            rng = np.array([-5,5])/bsf
+            plt.xlim(rng)
+            plt.ylim(rng)
+            # Iterate each ring
+            for rii in range(0,rings*2,2):
+                # Find ellipse equation
+                xi,yi = opalfox.ellipse(new_centers[rii,:]*sf,
+                                        axes[rii,:]*sf ,np.radians(angles[rii]))
+                xo,yo = opalfox.ellipse(new_centers[rii+1,:]*sf,
+                                        axes[rii+1,:]*sf,np.radians(angles[rii+1]))
+                # Plot ellipse
+                plt.plot(xi,-yi, color='red', label='Fitted Ellipse')
+                plt.plot(xo,-yo, color='red', label='Fitted Ellipse')
+                plt.show()
+            # Plot Sim
+            sgimage[np.where(sgimage==255)] = np.nan
+            im = ax.imshow(sgimage,
+                        #origin='lower',
+                        extent=[(sxrange[0]-sx_off)*scsim,(sxrange[1]-sx_off)*scsim,
+                                (syrange[0]-sy_off)*scsim,(syrange[1]-sy_off)*scsim])
+            
+            
+            # Gridlines based on minor ticks
+            ax.grid(which='major', color='w', linestyle='-', linewidth=.1)
+            
+            # Rotate sim image
+            trans_data = mtransforms.Affine2D().rotate_deg(ang_offaxis+ang_off) + ax.transData
+            im.set_transform(trans_data)
+            # Display intended extent of the image
+            x1, x2, y1, y2 = im.get_extent()
+            ax.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], "y--",
+                    transform=trans_data)
+            plt.xlabel('X (cm)')
+            plt.ylabel('Y (cm)')
+            plt.title('FOXSI 4 DATA/SIM- '+team+': POS'+str(pos)+", ANG"+angle)
+            plt.show()
+            plt.plot(new_centers[3,0]*sf[0],-new_centers[3,1]*sf[1],'b.',markersize=30)
+            plt.savefig(edir+"_ang_"+angle+"_match.png")
+            plt.close('all')
+    #%%############################################################################
+    # Section 3: Match Data to Simulation
+    ###############################################################################
+    ###############################################################################
+    # Interpolate data
+    offangle = np.interp(data_offaxis,sim_offaxis,sim_angles)
+    # Plot
+    plt.figure(figsize=(9,6))
+    plt.plot(sim_angles,sim_offaxis,'r.-',markersize=15)
+    plt.plot([-1,offangle],[data_offaxis,data_offaxis],'b--')
+    plt.plot([offangle,offangle],[data_offaxis,sim_offaxis[0]*.98],'b--')
+    plt.plot(offangle,data_offaxis,'b.',markersize=20)
+    plt.xlim([sim_angles[0]*.98,sim_angles[-1]*1.02])
+    plt.ylim([sim_offaxis[0]*.98,sim_offaxis[-1]*1.02])
+    #plt.xlim([sim_angles[0]*.98,1.9])
+    #plt.ylim([sim_offaxis[0]*.98,.105])
+    #plt.xlim(10.5,13.0)
+    #plt.ylim(.3,.4)
+    plt.grid()
+    plt.xlabel('Off Angle (arcmin)')
+    plt.ylabel('Asymmetry Value')
+    plt.title("Off Axis ("+lab_offaxis+" - ASYM ANG {:.0f}°".format(ang_offaxis)+"): P"+str(pos)+ " X"+str(xmod)+ " - {:.3f}\'".format(offangle))
+    plt.show()
+    plt.savefig(os.path.join(fdir,"FOXSI4_"+team+"_"+file+"_offaxis-"+offaxis_mthd+".png"))

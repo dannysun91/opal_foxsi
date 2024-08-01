@@ -1,15 +1,6 @@
 """
 OPAL FOX: OPtical ALignment for FOXSI
-############################################################
-   XX                    /\                   ,'|
- XX  XX ------------ o--'O `.                /  /
-   XX                 `--.   `-----------._,' ,'
-                          \              ,---'
-                           ) )    _,--(  |
-                          /,^.---'     )/\\
-                         ((   \\      ((  \\
-                          \)   \)      \) (/   
-############################################################
+
 Library for Determining Optical Alignment for FOXSI Mission
                       Orlando Romeo
                          07/20/23
@@ -25,6 +16,15 @@ Functions:
         Fixes the perspective of the image to ensure the grid is square with the observation plane based on user input
 """
 ############################################################
+#    XX                    /\                   ,'|
+#  XX  XX ------------ o--'O `.                /  /
+#    XX                 `--.   `-----------._,' ,'
+#                           \              ,---'
+#                            ) )    _,--(  |
+#                           /,^.---'     )/\\
+#                          ((   \\      ((  \\
+#                           \)   \)      \) (/   
+############################################################
 # Import Third-party libraries
 import os
 import numpy as np
@@ -33,12 +33,16 @@ import cv2
 from scipy.stats import binned_statistic_2d
 from scipy.signal import find_peaks
 from scipy.ndimage import median_filter, gaussian_filter
+from matplotlib.widgets import Button
+import time
 plt.rcParams["font.family"] = "Times New Roman" 
 plt.rcParams["font.size"]   = 18
 ############################################################
 # Reads image files and only considers RGB values of image
 def readimage(file):
     image = cv2.imread(file)
+    if image.any()==None:
+        raise ValueError("No File Found at {file}")
     image = image[:,:,:3] # Remove alpha values (Only need RGB Values)
     return image
 ############################################################
@@ -52,7 +56,7 @@ def alterimage(image,contrast=1,brighten=0.0):
 ############################################################
 # Plots image (increases brightness using 'brighten' keyword)
 def plotimage(image,brighten=0,title="FOXSI Optical Alignment",cmap='viridis'):
-    fig, ax = plt.subplots(figsize=(24,16))
+    fig, ax = plt.subplots(figsize=(24,16),num=title) # num is window title
     # Change brightness of image
     if brighten != 0:
         image = alterimage(image,contrast=1,brighten=brighten)
@@ -68,7 +72,8 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
     # Show Image (and set up scatter points)
     if ax == 0:
         fig, ax = plotimage(image,brighten=brighten,title=title,cmap=cmap)
-    scatter = ax.scatter([], [], marker='o', color='red')
+        fig.canvas.manager.full_screen_toggle()
+    scatter = ax.scatter([], [], marker='.', color='red')
     # Plot Lines at different angles
     sz = np.shape(image)
     lw=0.5
@@ -76,7 +81,17 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
     plt.plot([0,sz[1]],[sz[0],0],'w-',linewidth=lw)
     plt.plot([sz[1]/2,sz[1]/2],[0,sz[0]],'w-',linewidth=lw)
     plt.plot([0,sz[1]],[0,sz[0]],'w-',linewidth=lw)
+
+    # create buttons
+    axdone = fig.add_axes([0.81, 0.05, 0.1, 0.075])
+    bdone = Button(axdone, 'Done')
+    axundo = fig.add_axes([0.09, 0.05, 0.1, 0.075])
+    bundo = Button(axundo, 'Undo')
+    axreset = fig.add_axes([0.45, 0.05, 0.1, 0.075])
+    breset = Button(axreset, 'Reset')
     plt.draw()
+
+
     # Set up Callback class
     class SelectPointsCallback(object):
         def __init__(self,image_data):
@@ -84,32 +99,71 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
             self.points = []    # x,y coordinates
             self.z      = []    # z data
             self.cid    = None  # CID
+            self.goNext = False
+
+        def done(self, event):
+            if len(self.points) == n:
+                self.goNext = True
+                self.disconnect()
+            else:
+                plt.text(5,0,"Not enough points picked")
+                plt.draw()
+        def undo(self, event):
+            if len(self.points) > 1:
+                self.points.pop()
+                self.z.pop()
+                scatter.set_offsets(self.points)
+                plt.draw()
+                ax.set_title(f"Select {n - len(self.points)} more points")
+            else:
+                self.points = []
+                self.z      = []
+                scatter.set_offsets(np.array([]).reshape(0, 2))
+                plt.draw()
+                ax.set_title(f"Select {n - len(self.points)} more points")
+        def reset(self, event):
+            self.points = []
+            self.z      = []
+            scatter.set_offsets(np.array([]).reshape(0, 2))
+            plt.draw()
+            ax.set_title(f"Select {n - len(self.points)} more points")
+
         def __call__(self, event):
-            if plt.get_current_fig_manager().toolbar.mode == '': # Ensure not zooming in
-                if event.name == 'button_press_event':
-                    if event.xdata is not None and event.ydata is not None:
-                        xi, yi = int(event.xdata), int(event.ydata) 
-                        self.points.append((event.xdata, event.ydata))
-                        scatter.set_offsets(self.points)
-                        plt.draw()
-                        if 0 <= xi < self.image_data.shape[1] and 0 <= yi < self.image_data.shape[0]:
-                            self.z.append((self.image_data[yi, xi]))  # Include z-data (image values)
-                        else:
-                            self.z.append((self.image_data[yi, xi].fill(np.nan))) # Replace with NaNs
-                # Stop connection after n points are selected
-                if len(self.points) == n:
-                    self.disconnect()
+            if not bdone.ax.contains(event)[0] and not bundo.ax.contains(event)[0] and not breset.ax.contains(event)[0]: # not click button
+                if plt.get_current_fig_manager().toolbar.mode == '': # Ensure not zooming in
+                    if event.name == 'button_press_event' and len(self.points) < n: # click and not all points selected
+                        if event.xdata is not None and event.ydata is not None: # valid point
+                            xi, yi = int(event.xdata), int(event.ydata)
+                            if 0 <= xi < self.image_data.shape[1] and 0 <= yi < self.image_data.shape[0]: # within image
+                                self.points.append((event.xdata, event.ydata))
+                                self.z.append((self.image_data[yi, xi]))  # Include z-data (image values)
+                                scatter.set_offsets(self.points)
+                                plt.draw()
+                                ax.set_title(f"Select {n - len(self.points)} more points")
+                            # else:
+                            #     self.z.append((self.image_data[yi, xi].fill(np.nan))) # Replace with NaNs
+                    elif len(self.points) == n:
+                        ax.set_title(f"All points selected, click Done")
+                    # Stop connection after n points are selected
+                    # if len(self.points) == n:
+                    #     self.disconnect()
         # Disconnect user clicks
         def disconnect(self):
+            # plt.close()
             plt.disconnect(self.cid)
+
+
     # Check user clicks
     callback = SelectPointsCallback(image)
+    # create button and events
     callback.cid = plt.connect('button_press_event', callback)
-    plt.show()
+    bdone.on_clicked(callback.done)
+    bundo.on_clicked(callback.undo)
+    breset.on_clicked(callback.reset)
+    
     # Wait for user to select all n points
-    while len(callback.points) < n:
+    while not callback.goNext:
         plt.pause(0.01)
-    plt.close()
     # Check for returning normalized coordinates
     points = np.array(callback.points)
     if norm:
@@ -128,6 +182,7 @@ def fixperspective(image,savedir=0, brighten=20):
     # Select Points from user clicks on image
     print("Click on image to select 4 corner points for fixing perspective.")
     pts = selectpoints(image, n=4, brighten=brighten)
+
     sz  = np.shape(image)
     # Convert points to a NumPy array
     points = np.array(pts)
@@ -161,15 +216,28 @@ def fixperspective(image,savedir=0, brighten=20):
     bw = 0 # Border Width
     image_final = dst[int(targetPoints[0,1]-bw):int(targetPoints[2,1]+bw),
                       int(targetPoints[0,0]-bw):int(targetPoints[1,0]+bw)]
+    
     fig, ax = plotimage(image_final,brighten=1,title="FOXSI: Projected Grid")
+    fig.canvas.manager.full_screen_toggle()
+
+    axnext = fig.add_axes([0.45, 0, 0.1, 0.075])
+    bnext = Button(axnext, 'Next')
+    # Check user clicks
+    callback = Pause(bnext)
+    # create button and events
+    callback.cid = plt.connect('button_press_event', callback)
+
+    while not callback.goNext:
+        plt.pause(0.1)
+
     image_array = np.array(image_final, dtype=np.uint8)
     # Save the image as a PNG file using cv2.imwrite()
     if isinstance(savedir, str):
         # Create directory if not exists
-        if not os.path.exists(savedir):
+        if not os.path.exists(os.path.dirname(savedir)):
             # If it doesn't exist, create it
             os.makedirs(os.path.dirname(savedir))
-        file2 = cv2.imwrite(savedir, image_array)
+        cv2.imwrite(savedir, image_array)
         print('SAVING: '+savedir)
     return image_final
 ############################################################
@@ -205,6 +273,7 @@ def fixbrightness(image,savedir=0,minbrightness=-1,plot=0,crop=1):
         image_bright = image_bright[yindex1:yindex2,xindex1:xindex2]
     if plot != 0:
         fig, ax = plotimage(image_bright,title="FOXSI: Brightness Filter",cmap="gray")
+        fig.canvas.manager.full_screen_toggle()
     return image_bright
 ############################################################
 # Bins the image in r and theta bins by median function
@@ -380,3 +449,16 @@ def fitrings(image,image_bin=0,rings=2,auto=1,rbin=np.linspace(0, np.sqrt(2), nu
             plt.plot(xo,yo, color='blue', label='Fitted Ellipse')
             plt.show()  
     return centers,axes,angles
+
+
+class Pause(object):
+    def __init__(self,button):
+        self.cid = None  # CID
+        self.goNext = False
+        self.button = button
+
+    def __call__(self, event):
+        if self.button.ax.contains(event)[0]: # not click button
+            self.goNext = True
+            # plt.close()
+            plt.disconnect(self.cid)
