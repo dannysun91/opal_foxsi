@@ -91,9 +91,8 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
     bundo = Button(axundo, 'Undo')
     axreset = fig.add_axes([0.45, 0.05, 0.1, 0.075])
     breset = Button(axreset, 'Reset')
-    # if overplot_type != None:
-        # axtoggle = fig.add_axes([0.0, 0.9, 0.01, 0.075])
-        # btoggle = CheckButtons(axundo, 'Toggle')
+    axtoggle = fig.add_axes([0.0, 0.5, 0.1, 0.075])
+    btoggle = CheckButtons(axtoggle, ['Toggle'],[True])
     plt.draw()
 
 
@@ -105,7 +104,7 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
             self.z      = []    # z data
             self.cid    = None  # CID
             self.goNext = False # continue to next plot
-            self.toggle = True
+            self.toggleVal = True
         ###
         # BUTTONS
         ###
@@ -121,19 +120,18 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
                 self.points.pop()
                 self.z.pop()
                 scatter.set_offsets(self.points)
-                if overplot_type == "ellipse": # update the overplot
-                    if len(self.points) < 5:
-                        overplot.set_xdata([])
-                        overplot.set_ydata([])
-                    else:
-                        self.update_overplot()
+                if (overplot_type == "ellipse" and len(self.points) < 5) or (overplot_type == "squre" and len(self.points) < 2): # update the overplot
+                    overplot.set_xdata([])
+                    overplot.set_ydata([])
+                else:
+                    self.update_overplot(overplot_type)
                 plt.draw()
                 ax.set_title(f"Select {n - len(self.points)} more points")
             else:
                 self.points = []
                 self.z      = []
                 scatter.set_offsets(np.array([]).reshape(0, 2))
-                if overplot_type == "ellipse":
+                if overplot_type != None:
                     overplot.set_xdata([])
                     overplot.set_ydata([])
                 plt.draw()
@@ -142,20 +140,20 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
             self.points = []
             self.z      = []
             scatter.set_offsets(np.array([]).reshape(0, 2))
-            if overplot_type == "ellipse": # update overplot
+            if overplot_type != None: # update overplot
                 overplot.set_xdata([])
                 overplot.set_ydata([])
             plt.draw()
             ax.set_title(f"Select {n - len(self.points)} more points")
         def toggle(self, event):
-            if not self.toggle:
+            if not self.toggleVal:
                 overplot.set_alpha(0.3)
             else:
                 overplot.set_alpha(0)
-            self.toggle = not self.toggle
+            self.toggleVal = not self.toggleVal
 
         def __call__(self, event):
-            if not bdone.ax.contains(event)[0] and not bundo.ax.contains(event)[0] and not breset.ax.contains(event)[0]: # not click button
+            if not bdone.ax.contains(event)[0] and not bundo.ax.contains(event)[0] and not breset.ax.contains(event)[0] and not btoggle.ax.contains(event)[0]: # not click button
                 if plt.get_current_fig_manager().toolbar.mode == '': # Ensure not zooming in
                     if event.name == 'button_press_event' and len(self.points) < n: # click and not all points selected
                         if event.xdata is not None and event.ydata is not None: # valid point
@@ -167,23 +165,42 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
                                 plt.draw()
                                 ax.set_title(f"Select {n - len(self.points)} more points")
 
-                                if overplot_type == "ellipse" and len(self.points)>=5: # requires five points
-                                    self.update_overplot()
-                    elif len(self.points) == n:
+                                if overplot_type == "ellipse" and len(self.points)>=5: # requires five points for ellipse
+                                    self.update_overplot(overplot_type)
+                                if overplot_type == "square" and len(self.points)>=2:
+                                    self.update_overplot(overplot_type)
+                    elif len(self.points) == n: # all points selected
                         ax.set_title(f"All points selected, click Done")
 
         ### HELPER FUNCTIONS ###
-        def update_overplot(self): # helper function for updating overplot
+        def update_overplot(self, type): # helper function for updating overplot
             np_points = np.array(self.points)
             inner_x = np_points[:,0]
             inner_y = np_points[:,1]
-            inner_pts = (np.vstack((inner_x, inner_y), dtype=np.float32)).T
-            centers, axes, angles = cv2.fitEllipse(inner_pts)
+            if type=="ellipse":
+                inner_pts = (np.vstack((inner_x, inner_y), dtype=np.float32)).T
+                centers, axes, angles = cv2.fitEllipse(inner_pts)
 
-            xi,yi = ellipse(centers,axes,  np.radians(angles))
-            # Plot ellipse
-            overplot.set_xdata(xi)
-            overplot.set_ydata(yi)
+                xi,yi = ellipse(centers,axes,  np.radians(angles))
+                # Plot ellipse
+                overplot.set_xdata(xi)
+                overplot.set_ydata(yi)
+            if type=="square":
+                if len(self.points)==2:
+                    overplot.set_xdata(inner_x)
+                    overplot.set_ydata(inner_y)
+                elif len(self.points)==4:
+                    # super dumb way to plot the square lol
+                    leftInd = np.argsort(inner_x)[:2]
+                    botInd = np.argsort(inner_y)[:2]
+                    botleftInd = np.intersect1d(leftInd, botInd)
+                    squareIndices = np.array([np.sum(leftInd)-botleftInd[0],botleftInd[0],np.sum(botInd)-botleftInd[0],6-(np.sum(leftInd)+np.sum(botInd)-botleftInd[0])])
+                    overplot.set_xdata(np.append(inner_x[squareIndices],inner_x[squareIndices[0]]))
+                    overplot.set_ydata(np.append(inner_y[squareIndices],inner_y[squareIndices[0]]))
+                elif len(self.points)==3:
+                    overplot.set_xdata(np.append(inner_x,inner_x[0]))
+                    overplot.set_ydata(np.append(inner_y,inner_y[0]))
+
         # Disconnect user clicks
         def disconnect(self):
             # plt.close()
@@ -197,6 +214,7 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
     bdone.on_clicked(callback.done)
     bundo.on_clicked(callback.undo)
     breset.on_clicked(callback.reset)
+    btoggle.on_clicked(callback.toggle)
     
     # Wait for user to select all n points
     while not callback.goNext:
@@ -218,7 +236,7 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
 def fixperspective(image,savedir=0, brighten=20):
     # Select Points from user clicks on image
     print("Click on image to select 4 corner points for fixing perspective.")
-    pts = selectpoints(image, n=4, brighten=brighten)
+    pts = selectpoints(image, n=4, brighten=brighten, overplot_type="square")
 
     sz  = np.shape(image)
     # Convert points to a NumPy array
@@ -360,14 +378,14 @@ def ellipse(center,axes,angle,theta=np.linspace(0, 2*np.pi, 100)):
     return x,y
 ############################################################
 # Bins the image in r and theta bins by median function
-def fitrings(image,image_bin=0,rings=2,auto=1,rbin=np.linspace(0, np.sqrt(2), num=501),tbin=np.linspace(0, 2*np.pi, num=17),plot=0,minbright=[0,0]):
+def fitrings(image,image_bin=0,rings=2,auto=True,rbin=np.linspace(0, np.sqrt(2), num=501),tbin=np.linspace(0, 2*np.pi, num=17),plot=0,minbright=[0,0]):
     image2 = np.copy(image)
     image_med = np.copy(image_bin)
     # Find shape
     sz         = np.shape(image2)
     cntr_index = [sz[0]/2.,sz[1]/2.,]
     # Check to run automatic detection of ring edges
-    if auto == 1:
+    if auto:
         print("CODE NOT FINISHED - NEEDS WORK")
         # Create bins
         rmid = (rbin[:-1] + rbin[1:]) / 2.0
@@ -420,8 +438,9 @@ def fitrings(image,image_bin=0,rings=2,auto=1,rbin=np.linspace(0, np.sqrt(2), nu
         inner_x = inner_r*np.cos(tmid[:,np.newaxis]+np.pi/2.0)
         inner_y = inner_r*np.sin(tmid[:,np.newaxis]+np.pi/2.0) 
         outer_x = outer_r*np.cos(tmid[:,np.newaxis]+np.pi/2.0)
-        outer_y = outer_r*np.sin(tmid[:,np.newaxis]+np.pi/2.0)
-    # Check if user should select edges for each ring        
+        outer_y = outer_r*np.sin(tmid[:,np.newaxis]+np.pi/2.0)   
+    # Check if user should select edges for each ring     
+    # IE manual selection
     else:
         # Create inner and outer distance arrays
         tnum = 8
