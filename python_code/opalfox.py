@@ -205,6 +205,7 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
         def disconnect(self):
             # plt.close()
             plt.disconnect(self.cid)
+            plt.close()
 
 
     # Check user clicks

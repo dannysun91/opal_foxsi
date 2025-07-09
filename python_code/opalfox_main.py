@@ -27,11 +27,11 @@ from matplotlib.widgets import Button
 # Section 0: Initialize Parameters
 ###############################################################################
 ########### File Parameters for Specifying Image
-pos            = 5       # Optic Position
+pos            = 0       # Optic Position
 run            = 1       # Testing Run Number
 basedir        = os.path.dirname(os.getcwd()) # Change Base Directory for images
-team           = "Heritage"        # Team Name
-date           = '07-23-24'        # Date of Test
+team           = 'Marshall'        # Team Name
+date           = '07-08-25'        # Date of Test
 filetype       = '.JPG'            # Image File Type
 ########### Box surrounding optical laser image (usually a set of 4 x 4 squares)
 bsf            = 1.0 # Box Scaling Factor for cases that image is not entire 4x4 squares (usually set to 1)
