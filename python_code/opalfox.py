@@ -72,7 +72,7 @@ def selectpoints(image, n=4, brighten=0,zflag=False,norm=0,ax=0,cmap='viridis',t
     # Show Image (and set up scatter points)
     if ax == 0:
         fig, ax = plotimage(image,brighten=brighten,title=title,cmap=cmap)
-        fig.canvas.manager.full_screen_toggle()
+        # fig.canvas.manager.full_screen_toggle()
     scatter = ax.scatter([], [], marker='.', color='red')
     if overplot_type!=None:
         overplot, = ax.plot([],[], color='red',alpha=0.3)
@@ -274,7 +274,7 @@ def fixperspective(image,savedir=0, brighten=20):
                       int(targetPoints[0,0]-bw):int(targetPoints[1,0]+bw)]
     
     fig, ax = plotimage(image_final,brighten=1,title="FOXSI: Projected Grid")
-    fig.canvas.manager.full_screen_toggle()
+    # fig.canvas.manager.full_screen_toggle()
 
     axnext = fig.add_axes([0.45, 0, 0.1, 0.075])
     bnext = Button(axnext, 'Next')
@@ -329,7 +329,7 @@ def fixbrightness(image,savedir=0,minbrightness=-1,plot=0,crop=1):
         image_bright = image_bright[yindex1:yindex2,xindex1:xindex2]
     if plot != 0:
         fig, ax = plotimage(image_bright,title="FOXSI: Brightness Filter",cmap="gray")
-        fig.canvas.manager.full_screen_toggle()
+        # fig.canvas.manager.full_screen_toggle()
     return image_bright
 ############################################################
 # Bins the image in r and theta bins by median function
