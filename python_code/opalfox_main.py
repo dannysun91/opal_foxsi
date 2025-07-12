@@ -27,11 +27,11 @@ from matplotlib.widgets import Button
 # Section 0: Initialize Parameters
 ###############################################################################
 ########### File Parameters for Specifying Image
-pos            = 4       # Optic Position
+pos            = 1       # Optic Position
 run            = 1       # Testing Run Number
 basedir        = os.path.dirname(os.getcwd()) # Change Base Directory for images
 team           = 'Nagoya'        # Team Name
-date           = '07-08-25'        # Date of Test
+date           = '07-10-25'        # Date of Test
 filetype       = '.JPG'            # Image File Type
 ########### Box surrounding optical laser image (usually a set of 4 x 4 squares)
 bsf            = 1.0 # Box Scaling Factor for cases that image is not entire 4x4 squares (usually set to 1)
@@ -41,10 +41,10 @@ boxlen         = np.array([2.54*4.0])/bsf # Box Length (cm) - Can be 1 or 2 elem
 #boxlen         = np.array([32.7,32.2])
 ########### Simulation Parameters
 # Parameters for Simulations ; Use X0 for Heritage
-spos           = 1
+spos           = pos
 xmod           = 'T'
 # List of different off-axis angles for each simulated images
-sim_angles     = np.array([1.1,1.2,1.3,1.4,1.5])#np.concatenate([np.array([0,1.2,1.3,1.4]),np.arange(2,4.0,.1)])#np.arange(0,2,.2)#np.arange(0,1.2,.2)#
+sim_angles     = np.array([1.5,1.6,1.7])#np.concatenate([np.array([0,1.2,1.3,1.4]),np.arange(2,4.0,.1)])#np.arange(0,2,.2)#np.arange(0,1.2,.2)#
 # Method for determining off axis angle
 ########### Optical Alignment Parameters
 # Method type for calculating the off axis angle for each image (maxminratio, maxratio, centerratio)
@@ -118,9 +118,6 @@ else:
     axes    = ellipse['axes']
     angles  = ellipse['angles']
 
-for indind in centers:
-    print(indind[0]*sf[0]-boxlen/2.0)
-    print(-1*(indind[1]*sf[1]-boxlen/2.0))
 #%%############################################################################
 # Section 1.3: Analyze Data Image - Plot Fitted Rings
 ###############################################################################    
