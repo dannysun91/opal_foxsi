@@ -173,9 +173,9 @@ opt_len   = 5.600                  # Radius of optic (from center to screws)
 rot_ang   = 30.0                      # Rotation angle to orient optic wrt Rocket (degrees)
 # OPTIC ALIGNMENT Properties (degrees)
 # Misalignment angle Amount - Usually within 20 arcminutes
-mis_ang = 0.736/60.0
+mis_ang = .742/60.0
 # Off Axis Amount (degrees) (from start of unit circle (x=1,y=0), going around CCW (0-360)) - Shim away from shearing
-off_ang = 178
+off_ang = 284
 # Account for 180 shift from perspective of looking at the payload from the front vs the back
 off_ang = (270.0-off_ang)+90.0
 # Compute horizontal and vertical offsets in cartesian frame
@@ -187,7 +187,7 @@ voff = np.arcsin(yoff/opt_len)/np.pi*180.0
 # SHIM Properties (inches)
 shim_thick = 0.002                   # Shim thickness (in)
 shim_rad   = 0.100                   # Shim Radius
-maxsnum    = 5                      # Max Number of Shims
+maxsnum    = 10                      # Max Number of Shims
 # SCRIPT Flags
 plot_optic = None                       # Flag to plot optic
 prnt_flg   = 0                       # Flag set to print all results for every shim combo
